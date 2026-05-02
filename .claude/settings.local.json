@@ -9,7 +9,10 @@
       "Bash(curl *)",
       "Read(//c/Users/bilal/.aws/**)",
       "Bash(env)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "PowerShell(Get-ChildItem env: | Where-Object { $_.Name -match 'AWS|BEDROCK' } | Format-Table -AutoSize)",
+      "Bash(AWS_PROFILE=ledgeragent-dev node scripts/embed-postcodes.mjs)",
+      "mcp__mongodb__find"
     ]
   }
 }
