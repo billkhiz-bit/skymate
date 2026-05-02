@@ -15,7 +15,7 @@ export async function appendQuery(entry: QueryLogEntry): Promise<void> {
     const db = await getDb();
     await db.collection<QueryLogEntry>(COLLECTION).insertOne(entry);
   } catch (err) {
-    // Non-fatal — never break the user's response over a logging failure.
+    // Non-fatal - never break the user's response over a logging failure.
     console.warn("[query-log] insert failed:", err);
   }
 }

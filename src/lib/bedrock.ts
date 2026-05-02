@@ -27,7 +27,7 @@ export async function callHaiku(systemPrompt: string, userPrompt: string): Promi
 
   const text = response.output?.message?.content?.[0]?.text ?? "";
   if (!response.usage) {
-    throw new Error("Bedrock response missing usage block — sham implementation guard tripped");
+    throw new Error("Bedrock response missing usage block - sham implementation guard tripped");
   }
 
   return {
@@ -75,7 +75,7 @@ export async function callTitanEmbed(text: string): Promise<TitanEmbedResult> {
 }
 
 // ---------------------------------------------------------------------------
-// Intent decomposer — turns natural-language housing concerns into a JSON
+// Intent decomposer - turns natural-language housing concerns into a JSON
 // retrieval plan. This is the layer that makes adaptive retrieval truly
 // agentic: the model infers source weights from raw text, rather than the
 // user picking a pre-built profile.

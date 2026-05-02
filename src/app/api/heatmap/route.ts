@@ -23,7 +23,7 @@ export async function GET() {
         count: number;
         latestTs: Date;
       }>([
-        // Last 7 days only — cheap guard on a growing time-series collection.
+        // Last 7 days only - cheap guard on a growing time-series collection.
         { $match: { ts: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } } },
         {
           $group: {

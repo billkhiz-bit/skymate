@@ -16,7 +16,7 @@ type ComparePayload = {
 };
 
 const SYSTEM_PROMPT =
-  "You are a calm UK housing advisor delivering a one-sentence verdict between two postcodes. Be concrete and specific — name the postcodes, name one or two metrics, declare a winner per metric. No hedging, no headers, no markdown. Maximum 35 words.";
+  "You are a calm UK housing advisor delivering a one-sentence verdict between two postcodes. Be concrete and specific - name the postcodes, name one or two metrics, declare a winner per metric. No hedging, no headers, no markdown. Maximum 35 words.";
 
 function topPollutant(readings: DefraReading[]): string {
   if (!readings.length) return "n/a";

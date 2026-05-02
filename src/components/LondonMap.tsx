@@ -87,7 +87,7 @@ function lookup(postcode: string): Pos | null {
   return null;
 }
 
-const MARKER_COLORS = ["#0d9488", "#0284c7"]; // teal-600, sky-600 — strong contrast on light bg
+const MARKER_COLORS = ["#0d9488", "#0284c7"]; // teal-600, sky-600 - strong contrast on light bg
 
 // Flight corridor paths, named so we can hang animated planes off them
 const FLIGHT_PATHS = {
@@ -126,7 +126,7 @@ export default function LondonMap({
   return (
     <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm">
       <header className="flex items-center justify-between bg-slate-50 px-4 py-2.5 border-b border-slate-200">
-        <h3 className="text-sm font-semibold tracking-wide text-slate-800">Greater London — postcode geometry</h3>
+        <h3 className="text-sm font-semibold tracking-wide text-slate-800">Greater London - postcode geometry</h3>
         <span className="text-xs text-slate-500 font-mono">
           {heatPoints.length > 0
             ? `pollution heatmap · ${heatPoints.length} postcode${heatPoints.length === 1 ? "" : "s"} · agg pipeline on Atlas time-series`
@@ -147,7 +147,7 @@ export default function LondonMap({
             <polygon points="0.6,0.4 -1.7,2.6 -2.4,2.6 -1.4,0.3" fill="#0f172a" stroke="#020617" strokeWidth="0.12" strokeLinejoin="round" />
             {/* Top tail fin */}
             <polygon points="-2.6,-0.3 -3.5,-1.5 -3.85,-1.5 -2.95,-0.15" fill="#0f172a" stroke="#020617" strokeWidth="0.12" strokeLinejoin="round" />
-            {/* Bottom tail fin (smaller — purely visual horizontal stabiliser) */}
+            {/* Bottom tail fin (smaller - purely visual horizontal stabiliser) */}
             <polygon points="-2.6,0.3 -3.4,0.95 -3.7,0.95 -2.95,0.15" fill="#0f172a" stroke="#020617" strokeWidth="0.12" strokeLinejoin="round" />
             {/* Nose tip */}
             <polygon points="3.4,-0.45 3.85,0 3.4,0.45" fill="#020617" />
@@ -158,7 +158,7 @@ export default function LondonMap({
             <feGaussianBlur stdDeviation="0.4" />
           </filter>
 
-          {/* Park gradient — soft green */}
+          {/* Park gradient - soft green */}
           <linearGradient id="park" x1="0%" y1="0%" x2="0%" y2="100%">
             <stop offset="0%" stopColor="#86efac" stopOpacity="0.55" />
             <stop offset="100%" stopColor="#4ade80" stopOpacity="0.4" />
@@ -215,7 +215,7 @@ export default function LondonMap({
         />
         <text x="55" y="86" fontSize="2.8" fill="#0369a1" fontFamily="ui-monospace, monospace" fontWeight="600">Thames</text>
 
-        {/* Flight corridors — paths */}
+        {/* Flight corridors - paths */}
         <path id="path-heathrow" d={FLIGHT_PATHS.heathrow} fill="none" stroke="#d97706" strokeWidth="0.85" strokeDasharray="2.5 1.5" opacity="0.85" />
         <text x="40" y="68" fontSize="3" fill="#b45309" fontFamily="ui-monospace, monospace" fontWeight="600">→ Heathrow</text>
 

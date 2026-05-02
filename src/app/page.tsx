@@ -39,12 +39,12 @@ const PREFERENCES = ["default", "family", "air", "quiet", "flights", "custom"] a
 type Preference = (typeof PREFERENCES)[number];
 
 const PREFERENCE_LABELS: Record<Preference, { short: string; long: string }> = {
-  default: { short: "Balanced", long: "No preference — balance air, similarity, and flight noise equally" },
+  default: { short: "Balanced", long: "No preference - balance air, similarity, and flight noise equally" },
   family: { short: "Family with kids", long: "Prioritise air quality + low noise; mention parks and quiet streets" },
   air: { short: "Air quality first", long: "Lead with the highest pollutant; respiratory-sensitive framing" },
   quiet: { short: "Quiet preferred", long: "Lean on similar peaceful neighbours; emphasise noise sources" },
-  flights: { short: "Avoid flight paths", long: "Flight intensity dominates — overhead aircraft is the top concern" },
-  custom: { short: "Describe your needs", long: "Type in plain English — the agent decomposes intent into source weights" },
+  flights: { short: "Avoid flight paths", long: "Flight intensity dominates - overhead aircraft is the top concern" },
+  custom: { short: "Describe your needs", long: "Type in plain English - the agent decomposes intent into source weights" },
 };
 
 type IntentDecomposition = {
@@ -134,7 +134,7 @@ export default function Home() {
   const [inputA, setInputA] = useState("Hampstead");
   const [inputB, setInputB] = useState("SE10");
   const [preference, setPreference] = useState<Preference>("default");
-  const [intentText, setIntentText] = useState("I'm asthmatic with two young kids and work nights — somewhere with low pollution and quiet for sleeping.");
+  const [intentText, setIntentText] = useState("I'm asthmatic with two young kids and work nights - somewhere with low pollution and quiet for sleeping.");
   const [loading, setLoading] = useState(false);
   const [loadingStage, setLoadingStage] = useState(0);
   const [resolvedA, setResolvedA] = useState<ResolveResult | null>(null);
@@ -160,7 +160,7 @@ export default function Home() {
       const data = await res.json();
       setRecent(Array.isArray(data.recent) ? data.recent : []);
     } catch {
-      // Non-fatal — history is best-effort.
+      // Non-fatal - history is best-effort.
     }
   }
 
@@ -270,7 +270,7 @@ export default function Home() {
             </span>
           </div>
           <p className="text-slate-600 text-base max-w-2xl leading-relaxed">
-            Compare any two London postcodes — or borough names — on live air quality, noise, and similarity to areas you already know.
+            Compare any two London postcodes - or borough names - on live air quality, noise, and similarity to areas you already know.
             Pick a profile and watch the agent re-weight its sources. The decision trace shows exactly which data it pulled and how heavily it leaned on each.
           </p>
           <div className="pt-2">
@@ -318,7 +318,7 @@ export default function Home() {
             <ExampleChip onClick={() => setInputA("Shoreditch")}>Shoreditch</ExampleChip>{" "}
             <ExampleChip onClick={() => setInputB("Wimbledon")}>Wimbledon</ExampleChip>{" "}
             <ExampleChip onClick={() => setInputA("Canary Wharf")}>Canary Wharf</ExampleChip>{" "}
-            <span className="text-slate-400">— borough or postcode both work</span>
+            <span className="text-slate-400">- borough or postcode both work</span>
           </div>
 
           <PreferenceSelector value={preference} onChange={setPreference} />
@@ -496,11 +496,11 @@ function IntentInput({ value, onChange }: { value: string; onChange: (v: string)
         />
       </label>
       <div className="text-[11px] text-slate-500 italic">
-        Try: <button type="button" onClick={() => onChange("I'm asthmatic and work from home — air quality matters most.")} className="underline hover:text-emerald-700">asthmatic + WFH</button>
+        Try: <button type="button" onClick={() => onChange("I'm asthmatic and work from home - air quality matters most.")} className="underline hover:text-emerald-700">asthmatic + WFH</button>
         {" · "}
-        <button type="button" onClick={() => onChange("Night shift worker — I sleep during the day, so overhead planes are a problem.")} className="underline hover:text-emerald-700">night shift</button>
+        <button type="button" onClick={() => onChange("Night shift worker - I sleep during the day, so overhead planes are a problem.")} className="underline hover:text-emerald-700">night shift</button>
         {" · "}
-        <button type="button" onClick={() => onChange("Family with two young kids and a baby — air quality and quiet streets matter most.")} className="underline hover:text-emerald-700">family</button>
+        <button type="button" onClick={() => onChange("Family with two young kids and a baby - air quality and quiet streets matter most.")} className="underline hover:text-emerald-700">family</button>
         {" · "}
         <button type="button" onClick={() => onChange("Find me somewhere similar in vibe to NW3 but cheaper.")} className="underline hover:text-emerald-700">similar to NW3</button>
       </div>
@@ -540,7 +540,7 @@ function PreferenceSelector({ value, onChange }: { value: Preference; onChange: 
 }
 
 // ---------------------------------------------------------------------------
-// Pollutant thresholds — visual band indicators only. NOT health advice.
+// Pollutant thresholds - visual band indicators only. NOT health advice.
 // Bands chosen for legibility against typical London ambient ranges.
 // ---------------------------------------------------------------------------
 type Band = "low" | "moderate" | "elevated";
@@ -630,7 +630,7 @@ function ResultCard({
   if (!result) {
     return (
       <div className="border border-slate-200 border-dashed bg-white/40 rounded-2xl p-5 min-h-[200px] flex items-center justify-center">
-        <div className="text-slate-400 text-sm">{placeholder} — no result yet</div>
+        <div className="text-slate-400 text-sm">{placeholder} - no result yet</div>
       </div>
     );
   }
@@ -650,7 +650,7 @@ function ResultCard({
         <div className="flex items-baseline gap-2 flex-wrap">
           <h2 className="text-2xl font-semibold font-mono text-slate-900">{result.postcode}</h2>
           {resolved?.fromArea && resolved.areaName && (
-            <span className="text-xs text-slate-500">— {resolved.areaName}</span>
+            <span className="text-xs text-slate-500">- {resolved.areaName}</span>
           )}
         </div>
         {result.preference && result.preference !== "default" && (
@@ -760,7 +760,7 @@ function TraceColumn({ label, steps }: { label: string; steps: TraceStep[] }) {
               w={s.weight.toFixed(2)} · {s.tookMs}ms
             </span>
           </div>
-          {/* #2 Animated weight bar — width transitions when profile changes the weight. */}
+          {/* #2 Animated weight bar - width transitions when profile changes the weight. */}
           <div className="w-full h-1 bg-slate-800/70 rounded-full overflow-hidden">
             <div
               className={
