@@ -1,6 +1,6 @@
 # SkyMate
 
-> Adaptive Retrieval for UK postcodes. The agent re-PLANS its retrieval based on your profile - and shows you exactly how on screen.
+> Adaptive Retrieval for London postcodes. The agent re-PLANS its retrieval based on your profile - and shows you exactly how on screen.
 
 Built for the **Cerebral Valley × MongoDB Agentic Evolution Hackathon** (London, 2 May 2026). Solo entry by [@billkhiz](https://github.com/billkhiz-bit).
 
@@ -8,7 +8,7 @@ Built for the **Cerebral Valley × MongoDB Agentic Evolution Hackathon** (London
 
 ## What it does
 
-Type two UK postcodes (or borough names - "Hampstead", "Greenwich", "Shoreditch" all auto-resolve). Pick a profile:
+Type two London postcodes (or borough names - "Hampstead", "Greenwich", "Shoreditch" all auto-resolve). Pick a profile:
 
 - **Balanced** - equal weight on air, similarity, flight noise
 - **Family with kids** - DEFRA-heavy, mention parks/quiet streets

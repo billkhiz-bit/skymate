@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SkyMate — Adaptive housing intelligence for UK postcodes",
-  description: "Agentic housing advisor that retrieves and synthesises live air quality, noise, and similarity signals for any UK postcode.",
+  title: "SkyMate — Adaptive housing intelligence for London postcodes",
+  description: "Agentic housing advisor that retrieves and synthesises live air quality, noise, and similarity signals for any London postcode.",
 };
 
 export default function RootLayout({

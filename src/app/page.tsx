@@ -266,11 +266,11 @@ export default function Home() {
           <div className="flex items-baseline gap-3 flex-wrap">
             <h1 className="text-4xl font-semibold tracking-tight text-slate-900">SkyMate</h1>
             <span className="text-sm text-sky-700 font-mono px-2 py-0.5 bg-sky-100 rounded-full">
-              Adaptive Retrieval for UK postcodes
+              Adaptive Retrieval for London postcodes
             </span>
           </div>
           <p className="text-slate-600 text-base max-w-2xl leading-relaxed">
-            Compare any two UK postcodes — or borough names — on live air quality, noise, and similarity to areas you already know.
+            Compare any two London postcodes — or borough names — on live air quality, noise, and similarity to areas you already know.
             Pick a profile and watch the agent re-weight its sources. The decision trace shows exactly which data it pulled and how heavily it leaned on each.
           </p>
           <div className="pt-2">
