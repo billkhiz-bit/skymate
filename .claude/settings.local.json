@@ -4,7 +4,12 @@
       "mcp__mongodb__list-databases",
       "mcp__mongodb__list-collections",
       "mcp__mongodb__insert-many",
-      "mcp__mongodb__create-index"
+      "mcp__mongodb__create-index",
+      "Bash(npm run *)",
+      "Bash(curl *)",
+      "Read(//c/Users/bilal/.aws/**)",
+      "Bash(env)",
+      "Bash(git *)"
     ]
   }
 }

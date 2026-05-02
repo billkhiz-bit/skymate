@@ -1,13 +1,9 @@
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
-import { fromIni } from "@aws-sdk/credential-providers";
 
-const HAIKU_4_5 = "anthropic.claude-haiku-4-5-20251001-v1:0";
+const HAIKU_4_5 = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
 
 const client = new BedrockRuntimeClient({
   region: process.env.AWS_REGION ?? "us-east-1",
-  credentials: process.env.AWS_PROFILE
-    ? fromIni({ profile: process.env.AWS_PROFILE })
-    : undefined,
 });
 
 export type BedrockResult = {
