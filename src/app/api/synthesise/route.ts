@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { callHaiku, callTitanEmbed, decomposeIntent, type IntentDecomposition } from "@/lib/bedrock";
 import { fetchAirQualityNearPostcode, type DefraReading } from "@/lib/defra";
 import { findSimilarPostcodes, type SimilarPostcode } from "@/lib/vector-search";
+export type SimilarPostcodeBrief = { postcode: string; name: string; score: number };
 import { getFlightIntensity, type FlightIntensity } from "@/lib/flight-paths";
 import { getOrCreateSessionId, applySessionCookie } from "@/lib/sessions";
 import { appendQuery } from "@/lib/query-log";
@@ -26,6 +27,7 @@ export type SynthesiseResponse = {
   sessionId: string;
   defra: DefraReading[];
   flight: FlightIntensity;
+  similar: SimilarPostcodeBrief[];
 };
 
 const PREFERENCES = ["default", "family", "air", "quiet", "flights", "custom"] as const;
@@ -268,6 +270,7 @@ export async function GET(request: Request) {
     sessionId: sid,
     defra: defra.value,
     flight: flight.value,
+    similar: similar.value.map((s) => ({ postcode: s.postcode, name: s.name, score: s.score })),
   };
 
   const response = NextResponse.json(body);

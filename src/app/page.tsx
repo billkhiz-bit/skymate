@@ -22,6 +22,7 @@ type FlightInfo = {
   primaryCorridor: string;
   altitudeBand: string;
 };
+type SimilarPostcodeBrief = { postcode: string; name: string; score: number };
 
 function timeAgo(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
@@ -73,6 +74,7 @@ type SynthesiseResponse = {
   sessionId?: string;
   defra?: DefraReading[];
   flight?: FlightInfo;
+  similar?: SimilarPostcodeBrief[];
 };
 
 const LOADING_STAGES = [
@@ -681,6 +683,23 @@ function ResultCard({
         {visibleSummary}
         {isTyping && <span className="inline-block w-1 h-3.5 bg-sky-600 align-middle ml-0.5 animate-pulse" />}
       </div>
+
+      {result.similar && result.similar.length > 0 && (
+        <div className="flex flex-wrap items-baseline gap-1.5 pt-2 border-t border-slate-100">
+          <span className="text-[11px] uppercase tracking-wider text-slate-500 font-medium">Similar to</span>
+          {result.similar.map((s, i) => (
+            <span
+              key={`${s.postcode}-${i}`}
+              className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 font-mono"
+              title={`${s.name} · cosine ${s.score.toFixed(3)}`}
+            >
+              <span className="font-semibold">{s.postcode}</span>
+              <span className="text-emerald-600/70"> · {s.name}</span>
+            </span>
+          ))}
+          <span className="text-[10px] text-slate-400 font-mono italic ml-1">via Atlas Vector Search</span>
+        </div>
+      )}
 
       {result.sources?.length > 0 && (
         <div className="flex flex-wrap gap-1.5 pt-3 border-t border-slate-100">
