@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import LondonMap from "@/components/LondonMap";
 import { resolveToPostcode, type ResolveResult } from "@/lib/area-postcodes";
 
@@ -9,6 +9,18 @@ type RecentQuery = {
   preference: string;
   summaryPreview: string;
   ts: string;
+};
+
+type Pollutants = { no2: number; pm25: number; pm10: number };
+type DefraReading = {
+  stationName: string;
+  distanceKm: number;
+  pollutants: Pollutants;
+};
+type FlightInfo = {
+  intensity: number;
+  primaryCorridor: string;
+  altitudeBand: string;
 };
 
 function timeAgo(iso: string): string {
@@ -48,7 +60,17 @@ type SynthesiseResponse = {
   sources: string[];
   trace: TraceStep[];
   sessionId?: string;
+  defra?: DefraReading[];
+  flight?: FlightInfo;
 };
+
+const LOADING_STAGES = [
+  "decomposing query…",
+  "pulling DEFRA stations…",
+  "vector-searching neighbours…",
+  "checking flight corridors…",
+  "synthesising with Haiku 4.5…",
+];
 
 async function fetchOne(postcode: string, preference: Preference): Promise<SynthesiseResponse> {
   const res = await fetch(
@@ -61,17 +83,52 @@ async function fetchOne(postcode: string, preference: Preference): Promise<Synth
   return res.json();
 }
 
+async function fetchVerdict(args: {
+  postcodeA: string;
+  postcodeB: string;
+  resultA: SynthesiseResponse;
+  resultB: SynthesiseResponse;
+  preference: Preference;
+}): Promise<string | null> {
+  try {
+    const res = await fetch("/api/compare", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        postcodeA: args.postcodeA,
+        postcodeB: args.postcodeB,
+        summaryA: args.resultA.summary,
+        summaryB: args.resultB.summary,
+        defraA: args.resultA.defra ?? [],
+        defraB: args.resultB.defra ?? [],
+        flightA: args.resultA.flight,
+        flightB: args.resultB.flight,
+        preference: args.preference,
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return typeof data.verdict === "string" ? data.verdict : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function Home() {
   const [inputA, setInputA] = useState("Hampstead");
   const [inputB, setInputB] = useState("SE10");
   const [preference, setPreference] = useState<Preference>("default");
   const [loading, setLoading] = useState(false);
+  const [loadingStage, setLoadingStage] = useState(0);
   const [resolvedA, setResolvedA] = useState<ResolveResult | null>(null);
   const [resolvedB, setResolvedB] = useState<ResolveResult | null>(null);
   const [resultA, setResultA] = useState<SynthesiseResponse | null>(null);
   const [resultB, setResultB] = useState<SynthesiseResponse | null>(null);
+  const [verdict, setVerdict] = useState<string | null>(null);
+  const [verdictLoading, setVerdictLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recent, setRecent] = useState<RecentQuery[]>([]);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const previewA = resolveToPostcode(inputA);
   const previewB = resolveToPostcode(inputB);
@@ -91,6 +148,16 @@ export default function Home() {
     refreshHistory();
   }, []);
 
+  // Rotate the loading stage label while a query is in flight.
+  useEffect(() => {
+    if (!loading) return;
+    setLoadingStage(0);
+    const id = setInterval(() => {
+      setLoadingStage((s) => (s + 1) % LOADING_STAGES.length);
+    }, 700);
+    return () => clearInterval(id);
+  }, [loading]);
+
   function applyRecent(r: RecentQuery, slot: "A" | "B") {
     if (slot === "A") setInputA(r.postcode);
     else setInputB(r.postcode);
@@ -99,29 +166,55 @@ export default function Home() {
     }
   }
 
-  async function compare(e: React.FormEvent) {
-    e.preventDefault();
-    const a = resolveToPostcode(inputA);
-    const b = resolveToPostcode(inputB);
+  async function runCompare(a: ResolveResult, b: ResolveResult, prof: Preference) {
     setResolvedA(a);
     setResolvedB(b);
     setLoading(true);
     setError(null);
     setResultA(null);
     setResultB(null);
+    setVerdict(null);
     try {
       const [resA, resB] = await Promise.all([
-        fetchOne(a.postcode, preference),
-        fetchOne(b.postcode, preference),
+        fetchOne(a.postcode, prof),
+        fetchOne(b.postcode, prof),
       ]);
       setResultA(resA);
       setResultB(resB);
       refreshHistory();
+
+      // Fire the verdict synthesis after both summaries are in.
+      setVerdictLoading(true);
+      const v = await fetchVerdict({
+        postcodeA: a.postcode,
+        postcodeB: b.postcode,
+        resultA: resA,
+        resultB: resB,
+        preference: prof,
+      });
+      setVerdict(v);
+      setVerdictLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setLoading(false);
     }
+  }
+
+  async function compare(e: React.FormEvent) {
+    e.preventDefault();
+    const a = resolveToPostcode(inputA);
+    const b = resolveToPostcode(inputB);
+    await runCompare(a, b, preference);
+  }
+
+  async function runDemoSeed() {
+    setInputA("Hampstead");
+    setInputB("Greenwich");
+    setPreference("family");
+    const a = resolveToPostcode("Hampstead");
+    const b = resolveToPostcode("Greenwich");
+    await runCompare(a, b, "family");
   }
 
   return (
@@ -138,9 +231,20 @@ export default function Home() {
             Compare any two UK postcodes — or borough names — on live air quality, noise, and similarity to areas you already know.
             Pick a profile and watch the agent re-weight its sources. The decision trace shows exactly which data it pulled and how heavily it leaned on each.
           </p>
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={runDemoSeed}
+              disabled={loading}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 transition-colors shadow-sm"
+            >
+              ▶ Try the demo: Hampstead vs Greenwich · Family with kids
+            </button>
+          </div>
         </header>
 
         <form
+          ref={formRef}
           onSubmit={compare}
           className="flex flex-col gap-4 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm"
         >
@@ -160,9 +264,9 @@ export default function Home() {
             <button
               type="submit"
               disabled={loading || !inputA || !inputB}
-              className="h-11 px-6 rounded-lg bg-sky-600 text-white font-medium hover:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+              className="h-11 px-6 rounded-lg bg-sky-600 text-white font-medium hover:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm whitespace-nowrap"
             >
-              {loading ? "Asking the agent…" : "Compare"}
+              {loading ? LOADING_STAGES[loadingStage] : "Compare"}
             </button>
           </div>
 
@@ -189,9 +293,13 @@ export default function Home() {
         <LondonMap postcodes={[previewA.postcode, previewB.postcode].filter(Boolean)} />
 
         <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <ResultCard result={resultA} loading={loading} placeholder="Postcode A" resolved={resolvedA} />
-          <ResultCard result={resultB} loading={loading} placeholder="Postcode B" resolved={resolvedB} />
+          <ResultCard result={resultA} loading={loading} placeholder="Postcode A" resolved={resolvedA} stageText={LOADING_STAGES[loadingStage]} />
+          <ResultCard result={resultB} loading={loading} placeholder="Postcode B" resolved={resolvedB} stageText={LOADING_STAGES[loadingStage]} />
         </section>
+
+        {(verdict || verdictLoading) && (
+          <VerdictPanel verdict={verdict} loading={verdictLoading} preference={preference} />
+        )}
 
         {(resultA || resultB) && (
           <TracePanel left={resultA} right={resultB} />
@@ -326,21 +434,56 @@ function PreferenceSelector({ value, onChange }: { value: Preference; onChange: 
   );
 }
 
+// ---------------------------------------------------------------------------
+// Pollutant thresholds — visual band indicators only. NOT health advice.
+// Bands chosen for legibility against typical London ambient ranges.
+// ---------------------------------------------------------------------------
+type Band = "low" | "moderate" | "elevated";
+const BAND_COLOR: Record<Band, string> = {
+  low: "bg-emerald-500",
+  moderate: "bg-amber-500",
+  elevated: "bg-rose-500",
+};
+const BAND_LABEL: Record<Band, string> = {
+  low: "low",
+  moderate: "moderate",
+  elevated: "elevated",
+};
+
+function bandFor(pollutant: "no2" | "pm25" | "pm10", value: number): Band {
+  if (pollutant === "no2") return value < 40 ? "low" : value < 80 ? "moderate" : "elevated";
+  if (pollutant === "pm25") return value < 12 ? "low" : value < 25 ? "moderate" : "elevated";
+  return value < 25 ? "low" : value < 50 ? "moderate" : "elevated";
+}
+
+function PollutantPill({ name, value, unit, band }: { name: string; value: number; unit: string; band: Band }) {
+  return (
+    <div className="flex items-center gap-1.5 text-[11px] font-mono px-2 py-1 rounded-full bg-slate-50 border border-slate-200">
+      <span className={`w-1.5 h-1.5 rounded-full ${BAND_COLOR[band]}`} title={`${BAND_LABEL[band]} band`} />
+      <span className="text-slate-500">{name}</span>
+      <span className="text-slate-900 font-semibold">{value}</span>
+      <span className="text-slate-400">{unit}</span>
+    </div>
+  );
+}
+
 function ResultCard({
   result,
   loading,
   placeholder,
   resolved,
+  stageText,
 }: {
   result: SynthesiseResponse | null;
   loading: boolean;
   placeholder: string;
   resolved: ResolveResult | null;
+  stageText: string;
 }) {
   if (!result && loading) {
     return (
       <div className="border border-slate-200 bg-white rounded-2xl p-5 min-h-[200px] flex items-center justify-center shadow-sm">
-        <div className="text-slate-400 text-sm font-mono animate-pulse">retrieving…</div>
+        <div className="text-slate-500 text-sm font-mono animate-pulse">{stageText}</div>
       </div>
     );
   }
@@ -351,6 +494,9 @@ function ResultCard({
       </div>
     );
   }
+
+  const closest = result.defra?.[0];
+
   return (
     <article className="border border-slate-200 bg-white rounded-2xl p-5 flex flex-col gap-3 shadow-sm">
       <header className="flex items-baseline justify-between gap-2 flex-wrap">
@@ -366,9 +512,31 @@ function ResultCard({
           </span>
         )}
       </header>
+
+      {/* Pollutant pills with WHO-band dots */}
+      {closest && (
+        <div className="flex flex-wrap gap-1.5">
+          <PollutantPill name="NO₂" value={closest.pollutants.no2} unit="µg/m³" band={bandFor("no2", closest.pollutants.no2)} />
+          <PollutantPill name="PM₂.₅" value={closest.pollutants.pm25} unit="µg/m³" band={bandFor("pm25", closest.pollutants.pm25)} />
+          <PollutantPill name="PM₁₀" value={closest.pollutants.pm10} unit="µg/m³" band={bandFor("pm10", closest.pollutants.pm10)} />
+          {result.flight && (
+            <div className="flex items-center gap-1.5 text-[11px] font-mono px-2 py-1 rounded-full bg-slate-50 border border-slate-200">
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  result.flight.intensity < 0.35 ? "bg-emerald-500" : result.flight.intensity < 0.65 ? "bg-amber-500" : "bg-rose-500"
+                }`}
+              />
+              <span className="text-slate-500">flight</span>
+              <span className="text-slate-900 font-semibold">{result.flight.intensity.toFixed(2)}</span>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">
         {result.summary}
       </div>
+
       {result.sources?.length > 0 && (
         <div className="flex flex-wrap gap-1.5 pt-3 border-t border-slate-100">
           {result.sources.map((s, i) => (
@@ -379,6 +547,24 @@ function ResultCard({
         </div>
       )}
     </article>
+  );
+}
+
+function VerdictPanel({ verdict, loading, preference }: { verdict: string | null; loading: boolean; preference: Preference }) {
+  return (
+    <section className="border border-emerald-300 bg-gradient-to-br from-emerald-50 via-white to-sky-50 rounded-2xl p-5 shadow-sm">
+      <div className="flex items-baseline justify-between gap-2 flex-wrap mb-2">
+        <h3 className="text-sm font-semibold tracking-wide uppercase text-emerald-800">Agent verdict</h3>
+        <span className="text-xs text-slate-500 font-mono">
+          second Bedrock pass · weighted to {PREFERENCE_LABELS[preference].short.toLowerCase()}
+        </span>
+      </div>
+      {loading || !verdict ? (
+        <div className="text-slate-500 text-sm font-mono animate-pulse">writing the verdict…</div>
+      ) : (
+        <p className="text-slate-800 text-base leading-relaxed">{verdict}</p>
+      )}
+    </section>
   );
 }
 

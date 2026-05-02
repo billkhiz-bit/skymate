@@ -5,6 +5,7 @@ import { findSimilarPostcodes, type SimilarPostcode } from "@/lib/vector-search"
 import { getFlightIntensity, type FlightIntensity } from "@/lib/flight-paths";
 import { getOrCreateSessionId, applySessionCookie } from "@/lib/sessions";
 import { appendQuery } from "@/lib/query-log";
+import { appendAirQualitySnapshot } from "@/lib/air-quality-log";
 
 export type TraceStep = {
   step: string;
@@ -21,10 +22,14 @@ export type SynthesiseResponse = {
   sources: string[];
   trace: TraceStep[];
   sessionId: string;
+  defra: DefraReading[];
+  flight: FlightIntensity;
 };
 
 const PREFERENCES = ["default", "family", "air", "quiet", "flights"] as const;
 type Preference = (typeof PREFERENCES)[number];
+
+const PROMPT_TIGHTENER = " Maximum 60 words. Plain prose only — no headers, no bullet lists, no markdown.";
 
 type ProfileConfig = {
   defraWeight: number;
@@ -41,7 +46,7 @@ const PROFILES: Record<Preference, ProfileConfig> = {
     vectorWeight: 0.4,
     flightWeight: 0.3,
     decomposePlan: "Plan: DEFRA + Atlas Vector Search + flight intensity (balanced)",
-    systemPrompt: "You are a calm UK housing advisor. Two sentences max.",
+    systemPrompt: "You are a calm UK housing advisor. Two sentences max." + PROMPT_TIGHTENER,
     userPromptHint: "Reference at least one DEFRA pollutant figure in your reply.",
   },
   family: {
@@ -50,7 +55,8 @@ const PROFILES: Record<Preference, ProfileConfig> = {
     flightWeight: 0.5,
     decomposePlan: "Plan: DEFRA (heavy) + Vector Search + flight intensity — family profile, kids-first framing",
     systemPrompt:
-      "You are a calm UK housing advisor speaking to a family with young children. Two sentences max. Lead with what the air quality and noise mean for kids; mention parks or quiet streets where relevant.",
+      "You are a calm UK housing advisor speaking to a family with young children. Two sentences max. Lead with what the air quality and noise mean for kids; mention parks or quiet streets where relevant." +
+      PROMPT_TIGHTENER,
     userPromptHint: "The reader has young children. Reference at least one DEFRA pollutant figure and call out anything noise-related.",
   },
   air: {
@@ -59,7 +65,8 @@ const PROFILES: Record<Preference, ProfileConfig> = {
     flightWeight: 0.1,
     decomposePlan: "Plan: DEFRA dominates (0.95) — air-quality-first, similarity + flight de-prioritised",
     systemPrompt:
-      "You are an air quality specialist for someone with respiratory sensitivity. Two sentences max. Lead with the most important DEFRA pollutant figure and what it means for them.",
+      "You are an air quality specialist for someone with respiratory sensitivity. Two sentences max. Lead with the most important DEFRA pollutant figure and what it means for them." +
+      PROMPT_TIGHTENER,
     userPromptHint: "Lead with the highest DEFRA pollutant reading and explain its health implication. Be specific about µg/m³.",
   },
   quiet: {
@@ -68,7 +75,8 @@ const PROFILES: Record<Preference, ProfileConfig> = {
     flightWeight: 0.6,
     decomposePlan: "Plan: Vector Search (0.75) + flight intensity (0.6) — quiet profile, lean on peaceful neighbours",
     systemPrompt:
-      "You are a calm UK housing advisor for someone who values peace and quiet. Two sentences max. Focus on noise sources (traffic, transport, nightlife, flight paths) and how this postcode compares to quieter alternatives.",
+      "You are a calm UK housing advisor for someone who values peace and quiet. Two sentences max. Focus on noise sources (traffic, transport, nightlife, flight paths) and how this postcode compares to quieter alternatives." +
+      PROMPT_TIGHTENER,
     userPromptHint: "Emphasise noise and tranquillity. Reference at least one DEFRA figure but lead with the noise dimension.",
   },
   flights: {
@@ -77,7 +85,8 @@ const PROFILES: Record<Preference, ProfileConfig> = {
     flightWeight: 0.95,
     decomposePlan: "Plan: Flight intensity dominates (0.95) — avoiding overhead aircraft is the user's top priority",
     systemPrompt:
-      "You are a calm UK housing advisor for someone sensitive to aircraft noise. Two sentences max. Lead with overflight intensity and the primary flight corridor; reference DEFRA briefly only for context.",
+      "You are a calm UK housing advisor for someone sensitive to aircraft noise. Two sentences max. Lead with overflight intensity and the primary flight corridor; reference DEFRA briefly only for context." +
+      PROMPT_TIGHTENER,
     userPromptHint:
       "Lead with the flight overflight intensity (0–1) and the primary corridor (Heathrow, City Airport, or Stansted). DEFRA second.",
   },
@@ -130,6 +139,10 @@ export async function GET(request: Request) {
 
   const [defra, similar, flight] = await Promise.all([defraPromise, similarPromise, flightPromise]);
 
+  // Persist DEFRA snapshot to the time-series collection. Fire and await briefly
+  // so it actually flushes — typical insertMany of 6 docs is 30-60 ms.
+  await appendAirQualitySnapshot(postcode, defra.value);
+
   const userPrompt = [
     `Write a noise and air-quality summary for postcode ${postcode}.`,
     "",
@@ -152,8 +165,6 @@ export async function GET(request: Request) {
   const preview = result.text.length > 120 ? `${result.text.slice(0, 117)}...` : result.text;
   const summaryPreview = result.text.length > 80 ? `${result.text.slice(0, 77)}...` : result.text;
 
-  // Persist this query for the session — fire-and-forget but await briefly so it
-  // actually flushes in serverless contexts. ~30-50 ms typical.
   await appendQuery({
     sessionId: sid,
     postcode,
@@ -179,10 +190,10 @@ export async function GET(request: Request) {
       { step: "decompose", source: `router (profile: ${preference})`, weight: 1.0, tookMs: 1, summary: profile.decomposePlan },
       {
         step: "fetch_air_quality",
-        source: "DEFRA",
+        source: "DEFRA → Atlas time-series",
         weight: profile.defraWeight,
         tookMs: defra.tookMs,
-        summary: `Pulled ${defra.value.length} stations near ${postcode} (closest: ${stationNames[0]} @ ${defra.value[0].distanceKm} km)`,
+        summary: `Pulled ${defra.value.length} stations near ${postcode} (closest: ${stationNames[0]} @ ${defra.value[0].distanceKm} km) · written to air_quality time-series`,
       },
       {
         step: "fetch_similar_postcodes",
@@ -201,6 +212,8 @@ export async function GET(request: Request) {
       { step: "synthesise", source: "Bedrock Haiku 4.5", weight: 1.0, tookMs: synthTookMs, summary: preview },
     ],
     sessionId: sid,
+    defra: defra.value,
+    flight: flight.value,
   };
 
   const response = NextResponse.json(body);
