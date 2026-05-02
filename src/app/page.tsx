@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import LondonMap from "@/components/LondonMap";
+import LondonMap, { type HeatmapPoint } from "@/components/LondonMap";
 import { resolveToPostcode, type ResolveResult } from "@/lib/area-postcodes";
 
 type RecentQuery = {
@@ -128,6 +128,9 @@ export default function Home() {
   const [verdictLoading, setVerdictLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recent, setRecent] = useState<RecentQuery[]>([]);
+  const [heatmap, setHeatmap] = useState<HeatmapPoint[]>([]);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [heatmapLoading, setHeatmapLoading] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   const previewA = resolveToPostcode(inputA);
@@ -142,6 +145,28 @@ export default function Home() {
     } catch {
       // Non-fatal — history is best-effort.
     }
+  }
+
+  async function refreshHeatmap() {
+    setHeatmapLoading(true);
+    try {
+      const res = await fetch("/api/heatmap");
+      if (res.ok) {
+        const data = await res.json();
+        setHeatmap(Array.isArray(data.rows) ? data.rows : []);
+      }
+    } catch {
+      // Non-fatal.
+    } finally {
+      setHeatmapLoading(false);
+    }
+  }
+
+  async function toggleHeatmap() {
+    if (!showHeatmap) {
+      await refreshHeatmap();
+    }
+    setShowHeatmap((s) => !s);
   }
 
   useEffect(() => {
@@ -290,7 +315,34 @@ export default function Home() {
           </div>
         )}
 
-        <LondonMap postcodes={[previewA.postcode, previewB.postcode].filter(Boolean)} />
+        <div className="flex items-center justify-between gap-3 flex-wrap -mb-2">
+          <div className="flex items-baseline gap-2">
+            <span className="text-xs uppercase tracking-wider text-slate-500 font-medium">Map</span>
+            <span className="text-xs text-slate-400 font-mono">animated corridors · live postcodes</span>
+          </div>
+          <button
+            type="button"
+            onClick={toggleHeatmap}
+            disabled={heatmapLoading}
+            className={
+              "text-xs font-medium px-3 py-1.5 rounded-full border transition-colors " +
+              (showHeatmap
+                ? "bg-rose-500 text-white border-rose-500 hover:bg-rose-600"
+                : "bg-white text-slate-700 border-slate-300 hover:border-rose-400 hover:text-rose-700")
+            }
+            title="Aggregation pipeline over the air_quality time-series collection"
+          >
+            {heatmapLoading
+              ? "loading…"
+              : showHeatmap
+              ? `▣ Hide pollution heatmap (${heatmap.length})`
+              : "◰ Show pollution heatmap"}
+          </button>
+        </div>
+        <LondonMap
+          postcodes={[previewA.postcode, previewB.postcode].filter(Boolean)}
+          heatmap={showHeatmap ? heatmap : undefined}
+        />
 
         <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <ResultCard result={resultA} loading={loading} placeholder="Postcode A" resolved={resolvedA} stageText={LOADING_STAGES[loadingStage]} />
@@ -480,6 +532,41 @@ function ResultCard({
   resolved: ResolveResult | null;
   stageText: string;
 }) {
+  // Fade-in (#4): mounted flips true shortly after a result arrives so the
+  // CSS transition fires from "off" to "on" state.
+  const [mounted, setMounted] = useState(false);
+  // Typewriter (#1): reveal the summary character-by-character once data lands.
+  const [revealed, setRevealed] = useState(0);
+
+  const summary = result?.summary ?? "";
+  const cardKey = result ? `${result.postcode}-${result.preference}-${summary.length}` : null;
+
+  useEffect(() => {
+    if (!result) {
+      setMounted(false);
+      setRevealed(0);
+      return;
+    }
+    setMounted(false);
+    setRevealed(0);
+    const fadeId = setTimeout(() => setMounted(true), 30);
+    // Speed: ~14ms per char => ~70 chars/sec => ~150 char summary reveals in ~2s.
+    const typeId = setInterval(() => {
+      setRevealed((r) => {
+        if (r >= summary.length) {
+          clearInterval(typeId);
+          return r;
+        }
+        return r + 2; // 2 chars per tick for snappier reveal on long summaries
+      });
+    }, 14);
+    return () => {
+      clearTimeout(fadeId);
+      clearInterval(typeId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardKey]);
+
   if (!result && loading) {
     return (
       <div className="border border-slate-200 bg-white rounded-2xl p-5 min-h-[200px] flex items-center justify-center shadow-sm">
@@ -496,9 +583,16 @@ function ResultCard({
   }
 
   const closest = result.defra?.[0];
+  const visibleSummary = summary.slice(0, revealed);
+  const isTyping = revealed < summary.length;
 
   return (
-    <article className="border border-slate-200 bg-white rounded-2xl p-5 flex flex-col gap-3 shadow-sm">
+    <article
+      className={
+        "border border-slate-200 bg-white rounded-2xl p-5 flex flex-col gap-3 shadow-sm transition-all duration-500 ease-out " +
+        (mounted ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-2 scale-95")
+      }
+    >
       <header className="flex items-baseline justify-between gap-2 flex-wrap">
         <div className="flex items-baseline gap-2 flex-wrap">
           <h2 className="text-2xl font-semibold font-mono text-slate-900">{result.postcode}</h2>
@@ -513,7 +607,6 @@ function ResultCard({
         )}
       </header>
 
-      {/* Pollutant pills with WHO-band dots */}
       {closest && (
         <div className="flex flex-wrap gap-1.5">
           <PollutantPill name="NO₂" value={closest.pollutants.no2} unit="µg/m³" band={bandFor("no2", closest.pollutants.no2)} />
@@ -533,8 +626,9 @@ function ResultCard({
         </div>
       )}
 
-      <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">
-        {result.summary}
+      <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap min-h-[80px]">
+        {visibleSummary}
+        {isTyping && <span className="inline-block w-1 h-3.5 bg-sky-600 align-middle ml-0.5 animate-pulse" />}
       </div>
 
       {result.sources?.length > 0 && (
@@ -589,12 +683,22 @@ function TraceColumn({ label, steps }: { label: string; steps: TraceStep[] }) {
       <div className="text-xs uppercase tracking-wider text-slate-500 font-mono">{label}</div>
       {steps.length === 0 && <div className="text-xs text-slate-700">no trace</div>}
       {steps.map((s, i) => (
-        <div key={i} className="flex flex-col gap-0.5 py-2 border-b border-slate-900 last:border-b-0">
+        <div key={i} className="flex flex-col gap-1 py-2 border-b border-slate-900 last:border-b-0">
           <div className="flex items-baseline justify-between gap-2">
             <span className="text-sm font-mono text-emerald-400">{s.step}</span>
-            <span className="text-[10px] text-slate-500 font-mono">
+            <span className="text-[10px] text-slate-500 font-mono tabular-nums">
               w={s.weight.toFixed(2)} · {s.tookMs}ms
             </span>
+          </div>
+          {/* #2 Animated weight bar — width transitions when profile changes the weight. */}
+          <div className="w-full h-1 bg-slate-800/70 rounded-full overflow-hidden">
+            <div
+              className={
+                "h-full rounded-full transition-all duration-700 ease-out " +
+                (s.weight >= 0.7 ? "bg-emerald-400" : s.weight >= 0.4 ? "bg-sky-400" : "bg-slate-500")
+              }
+              style={{ width: `${Math.min(100, Math.max(2, s.weight * 100))}%` }}
+            />
           </div>
           <div className="text-xs text-slate-500 font-mono">{s.source}</div>
           <div className="text-xs text-slate-300">{s.summary}</div>

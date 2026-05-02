@@ -96,16 +96,42 @@ const FLIGHT_PATHS = {
   stansted: "M 130 130 Q 135 100 140 65 Q 145 35 150 5",
 };
 
-export default function LondonMap({ postcodes }: { postcodes: string[] }) {
+export type HeatmapPoint = {
+  postcode: string;
+  avgNo2: number;
+  count: number;
+};
+
+function heatColor(avgNo2: number): string {
+  if (avgNo2 < 35) return "#10b981"; // emerald-500 (low)
+  if (avgNo2 < 60) return "#f59e0b"; // amber-500 (moderate)
+  return "#f43f5e"; // rose-500 (elevated)
+}
+
+export default function LondonMap({
+  postcodes,
+  heatmap,
+}: {
+  postcodes: string[];
+  heatmap?: HeatmapPoint[];
+}) {
   const points = postcodes
     .map((p, i) => ({ postcode: p, pos: lookup(p), color: MARKER_COLORS[i % MARKER_COLORS.length] }))
     .filter((p): p is { postcode: string; pos: Pos; color: string } => p.pos !== null);
+
+  const heatPoints = (heatmap ?? [])
+    .map((h) => ({ ...h, pos: lookup(h.postcode) }))
+    .filter((h): h is HeatmapPoint & { pos: Pos } => h.pos !== null);
 
   return (
     <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm">
       <header className="flex items-center justify-between bg-slate-50 px-4 py-2.5 border-b border-slate-200">
         <h3 className="text-sm font-semibold tracking-wide text-slate-800">Greater London — postcode geometry</h3>
-        <span className="text-xs text-slate-500 font-mono">live flight corridors · Thames · borough labels</span>
+        <span className="text-xs text-slate-500 font-mono">
+          {heatPoints.length > 0
+            ? `pollution heatmap · ${heatPoints.length} postcode${heatPoints.length === 1 ? "" : "s"} · agg pipeline on Atlas time-series`
+            : "live flight corridors · Thames · borough labels"}
+        </span>
       </header>
       <svg viewBox="0 0 200 140" className="w-full h-auto block bg-gradient-to-b from-sky-50 via-white to-sky-50" xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -274,6 +300,32 @@ export default function LondonMap({ postcodes }: { postcodes: string[] }) {
           <line x1="0" y1="2" x2="0" y2="11" stroke="#475569" strokeWidth="0.5" />
           <polygon points="0,12 -1.2,10 1.2,10" fill="#475569" />
         </g>
+
+        {/* Heatmap layer (sits below postcode markers, above borough labels) */}
+        {heatPoints.map((h, i) => (
+          <g key={`heat-${h.postcode}-${i}`}>
+            <circle
+              cx={h.pos.x}
+              cy={h.pos.y}
+              r={Math.min(7, 3 + Math.log2(h.count + 1))}
+              fill={heatColor(h.avgNo2)}
+              opacity="0.45"
+            >
+              <animate attributeName="opacity" from="0.55" to="0.3" dur="3s" repeatCount="indefinite" />
+            </circle>
+            <text
+              x={h.pos.x}
+              y={h.pos.y + 1}
+              fontSize="2"
+              fill="#0f172a"
+              textAnchor="middle"
+              fontFamily="ui-monospace, monospace"
+              fontWeight="700"
+            >
+              {h.avgNo2.toFixed(0)}
+            </text>
+          </g>
+        ))}
 
         {/* Postcode markers (last so they sit on top) */}
         {points.map((p, i) => (
