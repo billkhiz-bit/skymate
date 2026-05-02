@@ -34,7 +34,7 @@ function timeAgo(iso: string): string {
   return `${d}d ago`;
 }
 
-const PREFERENCES = ["default", "family", "air", "quiet", "flights"] as const;
+const PREFERENCES = ["default", "family", "air", "quiet", "flights", "custom"] as const;
 type Preference = (typeof PREFERENCES)[number];
 
 const PREFERENCE_LABELS: Record<Preference, { short: string; long: string }> = {
@@ -43,6 +43,15 @@ const PREFERENCE_LABELS: Record<Preference, { short: string; long: string }> = {
   air: { short: "Air quality first", long: "Lead with the highest pollutant; respiratory-sensitive framing" },
   quiet: { short: "Quiet preferred", long: "Lean on similar peaceful neighbours; emphasise noise sources" },
   flights: { short: "Avoid flight paths", long: "Flight intensity dominates — overhead aircraft is the top concern" },
+  custom: { short: "Describe your needs", long: "Type in plain English — the agent decomposes intent into source weights" },
+};
+
+type IntentDecomposition = {
+  defraWeight: number;
+  vectorWeight: number;
+  flightWeight: number;
+  focus: string;
+  reasoning: string;
 };
 
 type TraceStep = {
@@ -56,6 +65,8 @@ type TraceStep = {
 type SynthesiseResponse = {
   postcode: string;
   preference?: Preference;
+  intent?: string;
+  intentDecomposition?: IntentDecomposition;
   summary: string;
   sources: string[];
   trace: TraceStep[];
@@ -72,10 +83,13 @@ const LOADING_STAGES = [
   "synthesising with Haiku 4.5…",
 ];
 
-async function fetchOne(postcode: string, preference: Preference): Promise<SynthesiseResponse> {
-  const res = await fetch(
-    `/api/synthesise?postcode=${encodeURIComponent(postcode)}&preference=${preference}`,
-  );
+async function fetchOne(postcode: string, preference: Preference, intent?: string): Promise<SynthesiseResponse> {
+  const params = new URLSearchParams({
+    postcode,
+    preference,
+  });
+  if (preference === "custom" && intent) params.set("intent", intent);
+  const res = await fetch(`/api/synthesise?${params.toString()}`);
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`API ${res.status}: ${text.slice(0, 200)}`);
@@ -118,6 +132,7 @@ export default function Home() {
   const [inputA, setInputA] = useState("Hampstead");
   const [inputB, setInputB] = useState("SE10");
   const [preference, setPreference] = useState<Preference>("default");
+  const [intentText, setIntentText] = useState("I'm asthmatic with two young kids and work nights — somewhere with low pollution and quiet for sleeping.");
   const [loading, setLoading] = useState(false);
   const [loadingStage, setLoadingStage] = useState(0);
   const [resolvedA, setResolvedA] = useState<ResolveResult | null>(null);
@@ -191,7 +206,7 @@ export default function Home() {
     }
   }
 
-  async function runCompare(a: ResolveResult, b: ResolveResult, prof: Preference) {
+  async function runCompare(a: ResolveResult, b: ResolveResult, prof: Preference, intent?: string) {
     setResolvedA(a);
     setResolvedB(b);
     setLoading(true);
@@ -201,8 +216,8 @@ export default function Home() {
     setVerdict(null);
     try {
       const [resA, resB] = await Promise.all([
-        fetchOne(a.postcode, prof),
-        fetchOne(b.postcode, prof),
+        fetchOne(a.postcode, prof, intent),
+        fetchOne(b.postcode, prof, intent),
       ]);
       setResultA(resA);
       setResultB(resB);
@@ -230,7 +245,7 @@ export default function Home() {
     e.preventDefault();
     const a = resolveToPostcode(inputA);
     const b = resolveToPostcode(inputB);
-    await runCompare(a, b, preference);
+    await runCompare(a, b, preference, preference === "custom" ? intentText : undefined);
   }
 
   async function runDemoSeed() {
@@ -305,6 +320,10 @@ export default function Home() {
           </div>
 
           <PreferenceSelector value={preference} onChange={setPreference} />
+
+          {preference === "custom" && (
+            <IntentInput value={intentText} onChange={setIntentText} />
+          )}
         </form>
 
         <RecentStrip recent={recent} onApply={applyRecent} />
@@ -452,6 +471,38 @@ function ExampleChip({ children, onClick }: { children: React.ReactNode; onClick
     >
       {children}
     </button>
+  );
+}
+
+function IntentInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex flex-col gap-2 pt-3 border-t border-slate-100">
+      <label className="flex flex-col gap-1">
+        <div className="flex items-baseline justify-between flex-wrap gap-2">
+          <span className="text-xs uppercase tracking-wider text-slate-500 font-medium">Describe your needs</span>
+          <span className="text-xs text-emerald-700 font-mono">
+            ↳ Bedrock decomposer infers source weights from your text
+          </span>
+        </div>
+        <textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          rows={2}
+          maxLength={400}
+          placeholder="e.g. I'm asthmatic with two young kids and work nights"
+          className="px-3 py-2 rounded-lg bg-white border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 focus:outline-none text-sm text-slate-900 placeholder:text-slate-400 resize-none"
+        />
+      </label>
+      <div className="text-[11px] text-slate-500 italic">
+        Try: <button type="button" onClick={() => onChange("I'm asthmatic and work from home — air quality matters most.")} className="underline hover:text-emerald-700">asthmatic + WFH</button>
+        {" · "}
+        <button type="button" onClick={() => onChange("Night shift worker — I sleep during the day, so overhead planes are a problem.")} className="underline hover:text-emerald-700">night shift</button>
+        {" · "}
+        <button type="button" onClick={() => onChange("Family with two young kids and a baby — air quality and quiet streets matter most.")} className="underline hover:text-emerald-700">family</button>
+        {" · "}
+        <button type="button" onClick={() => onChange("Find me somewhere similar in vibe to NW3 but cheaper.")} className="underline hover:text-emerald-700">similar to NW3</button>
+      </div>
+    </div>
   );
 }
 
